@@ -1,5 +1,4 @@
 module RSpotify
-
   # @attr [String] birthdate       The user's date-of-birth. This field is only available when the current user has granted access to the *user-read-birthdate* scope.
   # @attr [String] country         The country of the user, as set in the user's account profile. An {http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2 ISO 3166-1 alpha-2 country code}. This field is only available when the current user has granted access to the *user-read-private* scope.
   # @attr [Hash]   credentials     The credentials generated for the user with OAuth. Includes access token, token type, token expiration time and refresh token. This field is only available when the current user has granted access to any scope.
@@ -10,7 +9,6 @@ module RSpotify
   # @attr [String] product         The user's Spotify subscription level: "premium", "free", etc. This field is only available when the current user has granted access to the *user-read-private* scope.
   # @attr [Hash]   tracks_added_at A hash containing the date and time each track was saved by the user. Note: the hash is filled and updated only when {#saved_tracks} is used.
   class User < Base
-
     # Returns User object with id provided
     #
     # @param id [String]
@@ -45,7 +43,7 @@ module RSpotify
       # The purpose is to allow the calling environment to invoke some action,
       # such as persisting the new access token somewhere, when the new token
       # is generated.
-      if (access_refresh_proc.respond_to? :call)
+      if access_refresh_proc.respond_to? :call
         access_refresh_proc.call(response['access_token'], response['expires_in'])
       end
     rescue RestClient::BadRequest => e
@@ -54,7 +52,7 @@ module RSpotify
     private_class_method :refresh_token
 
     def self.extract_custom_headers(params)
-      headers_param = params.find{|x| x.is_a?(Hash) && x[:headers]}
+      headers_param = params.find { |x| x.is_a?(Hash) && x[:headers] }
       params.delete(headers_param) if headers_param
       headers_param ? headers_param[:headers] : {}
     end
@@ -63,7 +61,7 @@ module RSpotify
     def self.oauth_header(user_id)
       {
         'Authorization' => "Bearer #{@@users_credentials[user_id]['token']}",
-        'Content-Type'  => 'application/json'
+        'Content-Type' => 'application/json'
       }
     end
     private_class_method :oauth_header
@@ -73,9 +71,9 @@ module RSpotify
       headers = oauth_header(user_id).merge(custom_headers)
       params << headers
       RSpotify.send(:send_request, verb, path, *params)
-
     rescue RestClient::Exception => e
       raise e if e.response !~ /access token expired/
+
       refresh_token(user_id)
       params[-1] = oauth_header(user_id).merge(custom_headers)
       RSpotify.send(:send_request, verb, path, *params)
@@ -138,6 +136,7 @@ module RSpotify
       }.to_json
       response = User.oauth_post(@id, url, request_data)
       return response if RSpotify.raw_response
+
       Playlist.new response
     end
 
@@ -146,9 +145,10 @@ module RSpotify
     # @example
     #           player = user.player
     def player
-      url = "me/player"
+      url = 'me/player'
       response = User.oauth_get(@id, url)
       return response if RSpotify.raw_response
+
       response ? Player.new(self, response) : Player.new(self)
     end
 
@@ -239,6 +239,7 @@ module RSpotify
 
       response = User.oauth_get(@id, url)
       return response if RSpotify.raw_response
+
       response["#{type}s"]['items'].compact.map { |i| type_class.new i }
     end
 
@@ -279,6 +280,7 @@ module RSpotify
       url = "users/#{@id}/playlists?limit=#{limit}&offset=#{offset}"
       response = RSpotify.resolve_auth_request(@id, url)
       return response if RSpotify.raw_response
+
       response['items'].map { |i| Playlist.new i }
     end
 
@@ -313,7 +315,7 @@ module RSpotify
     #           user.saved_tracks.size #=> 20
     def save_tracks!(tracks)
       tracks_ids = tracks.map(&:id)
-      url = "me/tracks"
+      url = 'me/tracks'
       request_body = tracks_ids.inspect
       User.oauth_put(@id, url, request_body)
       tracks
@@ -342,6 +344,7 @@ module RSpotify
       end
 
       return response if RSpotify.raw_response
+
       tracks.map { |t| Track.new t['track'] }
     end
 
@@ -390,7 +393,7 @@ module RSpotify
     #           user.saved_albums.size #=> 10
     def save_albums!(albums)
       albums_ids = albums.map(&:id)
-      url = "me/albums"
+      url = 'me/albums'
       request_body = albums_ids.inspect
       User.oauth_put(@id, url, request_body)
       albums
@@ -416,6 +419,7 @@ module RSpotify
       albums = json['items'].select { |i| i['album'] }
 
       return response if RSpotify.raw_response
+
       albums.map { |a| Album.new a['album'] }
     end
 
@@ -430,6 +434,48 @@ module RSpotify
     def saved_albums?(albums)
       albums_ids = albums.map(&:id)
       url = "me/albums/contains?ids=#{albums_ids.join ','}"
+      User.oauth_get(@id, url)
+    end
+
+    # Returns the shows saved in the Spotify user’s “Your Podcasts” library
+    #
+    # @param limit  [Integer] Maximum number of shows to return. Maximum: 50. Minimum: 1. Default: 20.
+    # @param offset [Integer] The index of the first show to return. Use with limit to get the next set of shows. Default: 0.
+    # @param market [String]  Optional. An {http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2 ISO 3166-1 alpha-2 country code}.
+    # @return [Array<Shows>]
+    #
+    # @example
+    #           shows = user.saved_shows
+    #           shows.size       #=> 20
+    #           shows.first.name #=> "Üretim Bandı"
+
+    def saved_shows(limit: 20, offset: 0, market: nil)
+      url = "me/shows?limit=#{limit}&offset=#{offset}"
+      url << "&market=#{market}" if market
+      response = User.oauth_get(@id, url)
+      json = RSpotify.raw_response ? JSON.parse(response) : response
+
+      shows = json['items'].select { |i| i['show'] }
+      @shows_added_at = hash_for_shows(shows, 'added_at') do |added_at|
+        Time.parse added_at
+      end
+
+      return response if RSpotify.raw_response
+
+      shows.map { |s| Show.new s['show'] }
+    end
+
+    # Check if shows are already saved in the Spotify user’s “Your Podcasts” library. ** Only returns true if the album was saved via me/shows, not if you saved each track individually.
+    #
+    # @param shows [Array<Album>] The shows to check. Maximum: 50.
+    # @return [Array<Boolean>] Array of booleans, in the same order in which the shows were specified.
+    #
+    # @example
+    #           shows = RSpotify::Show.search('uretimbandi')
+    #           user.saved_shows?(shows) #=> [true, false, true...]
+    def saved_shows?(shows)
+      shows_ids = shows.map(&:id)
+      url = "me/shows/contains?ids=#{shows_ids.join ','}"
       User.oauth_get(@id, url)
     end
 
@@ -456,6 +502,7 @@ module RSpotify
       url = "me/top/artists?limit=#{limit}&offset=#{offset}&time_range=#{time_range}"
       response = User.oauth_get(@id, url)
       return response if RSpotify.raw_response
+
       response['items'].map { |i| Artist.new i }
     end
 
@@ -474,6 +521,7 @@ module RSpotify
       url = "me/top/tracks?limit=#{limit}&offset=#{offset}&time_range=#{time_range}"
       response = User.oauth_get(@id, url)
       return response if RSpotify.raw_response
+
       response['items'].map { |i| Track.new i }
     end
 
@@ -501,10 +549,10 @@ module RSpotify
       end
 
       url = if type == 'playlist'
-        "users/#{unfollowed.owner.id}/playlists/#{unfollowed.id}/followers"
-      else
-        "me/following?type=#{type}&ids=#{ids}"
-      end
+              "users/#{unfollowed.owner.id}/playlists/#{unfollowed.id}/followers"
+            else
+              "me/following?type=#{type}&ids=#{ids}"
+            end
 
       User.oauth_delete(@id, url)
       unfollowed
@@ -518,10 +566,11 @@ module RSpotify
     #           devices = user.devices
     #           devices.first.id #=> "5fbb3ba6aa454b5534c4ba43a8c7e8e45a63ad0e"
     def devices
-      url = "me/player/devices"
+      url = 'me/player/devices'
       response = RSpotify.resolve_auth_request(@id, url)
 
       return response if RSpotify.raw_response
+
       response['devices'].map { |i| Device.new i }
     end
   end

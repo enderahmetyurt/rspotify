@@ -1,7 +1,5 @@
 describe RSpotify::User do
-
   describe 'User::find' do
-
     before(:each) do
       # Get wizzler user as a testing sample
       @user = VCR.use_cassette('user:find:wizzler') do
@@ -10,12 +8,12 @@ describe RSpotify::User do
     end
 
     it 'should find user with correct attributes' do
-      expect(@user.external_urls['spotify']) .to eq 'https://open.spotify.com/user/wizzler'
-      expect(@user.followers['total'])       .to be > 0
-      expect(@user.href)                     .to eq 'https://api.spotify.com/v1/users/wizzler'
-      expect(@user.id)                       .to eq 'wizzler'
-      expect(@user.type)                     .to eq 'user'
-      expect(@user.uri)                      .to eq 'spotify:user:wizzler'
+      expect(@user.external_urls['spotify']).to eq 'https://open.spotify.com/user/wizzler'
+      expect(@user.followers['total']).to be > 0
+      expect(@user.href).to eq 'https://api.spotify.com/v1/users/wizzler'
+      expect(@user.id).to eq 'wizzler'
+      expect(@user.type).to eq 'user'
+      expect(@user.uri).to eq 'spotify:user:wizzler'
     end
 
     it 'should find user with correct playlists' do
@@ -27,10 +25,25 @@ describe RSpotify::User do
       playlists = VCR.use_cassette('user:wizzler:playlists:limit:20:offset:0') do
         @user.playlists
       end
-      expect(playlists)             .to be_an Array
-      expect(playlists.size)        .to eq 6
-      expect(playlists.first)       .to be_an RSpotify::Playlist
-      expect(playlists.map(&:name)) .to include('Movie Soundtrack Masterpieces', 'Blue Mountain State', 'Video Game Masterpieces')
+      expect(playlists).to be_an Array
+      expect(playlists.size).to eq 6
+      expect(playlists.first).to be_an RSpotify::Playlist
+      expect(playlists.map(&:name)).to include('Movie Soundtrack Masterpieces', 'Blue Mountain State',
+                                               'Video Game Masterpieces')
+    end
+
+    it 'should find user with shows' do
+      # Keys generated specifically for the tests. Should be removed in the future
+      authenticate_user
+
+      shows = VCR.use_cassette('user_saved_shows') do
+        @user.saved_shows
+      end
+      expect(shows).to be_an Array
+      expect(shows.size).to eq 6
+      expect(shows.first).to be_an RSpotify::Playlist
+      expect(shows.map(&:name)).to include('Movie Soundtrack Masterpieces', 'Blue Mountain State',
+                                           'Video Game Masterpieces')
     end
   end
 end
