@@ -12,7 +12,7 @@ Gem::Specification.new do |spec|
   spec.homepage      = 'http://rubygems.org/gems/rspotify'
   spec.license       = 'MIT'
 
-  spec.files         = `git ls-files -z`.split("\x0")
+  spec.files         = Dir.glob("{bin,lib,template}/**/*") + %w(LICENSE.txt README.md)
   spec.test_files    = spec.files.grep(/^spec\//)
   spec.require_paths = ['lib']
 
